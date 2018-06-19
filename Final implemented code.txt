@@ -1,0 +1,1086 @@
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <iostream>
+#include <map>
+#include <windows.h>
+#include <fstream>
+#include <vector>
+
+using namespace std;
+using namespace cv;
+
+Mat mx, mx2, mx3, mxm, nor, norem;
+int mset[256];
+
+struct moox{ //mobil box
+
+    int x1;
+    int y1;
+    int x2;
+    int y2;
+    int oss; //progress
+    int ncon;
+    int merge = 0;
+};
+
+vector<moox> mos;
+int cntofmos = 0;
+int cntofmos2 = 0;
+int confirm2lights = 0;
+int cntofmos3 = 0;
+
+int middler(Mat mx, int* loidx, int* roidx){ //oco, offset cnt order
+
+
+    for (int i0 = 0; i0 < 256; i0++){ mset[i0] = 0; }
+
+
+    for (int j = 0; j < (mx.rows - 1); j++)
+        for (int i = 0; i < (mx.cols - 1); i++){
+
+            Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+
+            mset[h1[2]]++;
+
+        }
+
+
+    int lo = 0; int loc = 0;
+    int ro = 255; int roc = 0; //if init on 255 then first to inc then updte
+    //step bck to 1/2
+
+    while (lo < ro){
+
+        if (loc >= roc){
+
+
+            roc += mset[ro];
+            ro--;
+
+
+        }
+        else{
+
+
+            loc += mset[lo];
+            lo++;
+
+        }
+
+
+    }
+
+    //check unequi left eg
+    int m = lo;
+    //printf("%d ", m);
+    /*lo--;
+    while (!mset[lo]){
+
+    lo--;
+
+    }*/
+
+    int stop = 0;
+    int omdist1 = 10000000;
+    int omdist2 = 10000000;
+    int osetcnt = (loc + roc) / 4;
+    while (!stop){//move first unequi point to equ 1/2 of 1/2, lo != ro
+
+        stop = 1;
+        int odist1 = abs(abs(roc) - osetcnt);
+        int odist2 = abs(abs(loc) - osetcnt);
+
+        if (odist1 < omdist1){
+
+            omdist1 = odist1;
+            stop = 0; //on updte in this round not to stop
+            roc -= mset[ro];
+            ro++;
+
+        }
+
+        if (odist2 < omdist2){
+
+            omdist2 = odist2;
+            stop = 0;
+            loc -= mset[lo];
+            lo--;
+            stop = 0;
+
+        }
+
+        /*if (loc >= roc){
+
+        ro++;
+        roc += mset[ro];
+
+
+        }
+        else{
+
+        lo--;
+        loc += mset[lo];
+
+        }*/
+
+
+    }
+
+    *loidx = lo;
+    *roidx = ro;
+
+    return m;
+
+
+}
+
+
+int middle2(Mat mx, int* loidx, int* roidx, int oco){ //oco, offset cnt order
+
+
+    for (int i0 = 0; i0 < 256; i0++){ mset[i0] = 0; }
+
+
+    for (int j = 0; j < (mx.rows - 1); j++)
+        for (int i = 0; i < (mx.cols - 1); i++){
+
+            Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+
+            int l;
+            if (h1[0] >= h1[1]) l = h1[0]; else l = h1[1];
+            if (h1[2] >= l) l = h1[2];
+            mset[l + oco]++;
+
+        }
+
+
+    int lo = 0; int loc = 0;
+    int ro = 255; int roc = 0; //if init on 255 then first to inc then updte
+    //step bck to 1/2
+
+    while (lo < ro){
+
+        if (loc >= roc){
+
+
+            roc += mset[ro];
+            ro--;
+
+
+        }
+        else{
+
+
+            loc += mset[lo];
+            lo++;
+
+        }
+
+
+    }
+
+    //check unequi left eg
+    int m = lo;
+    //printf("%d ", m);
+    /*lo--;
+    while (!mset[lo]){
+
+    lo--;
+
+    }*/
+
+    int stop = 0;
+    int omdist1 = 10000000;
+    int omdist2 = 10000000;
+    int osetcnt = (loc + roc) / 4;
+    while (!stop){//move first unequi point to equ 1/2 of 1/2, lo != ro
+
+        stop = 1;
+        int odist1 = abs(abs(roc) - osetcnt);
+        int odist2 = abs(abs(loc) - osetcnt);
+
+        if (odist1 < omdist1){
+
+            omdist1 = odist1;
+            stop = 0; //on updte in this round not to stop
+            roc -= mset[ro];
+            ro++;
+
+        }
+
+        if (odist2 < omdist2){
+
+            omdist2 = odist2;
+            stop = 0;
+            loc -= mset[lo];
+            lo--;
+            stop = 0;
+
+        }
+
+        /*if (loc >= roc){
+
+        ro++;
+        roc += mset[ro];
+
+
+        }
+        else{
+
+        lo--;
+        loc += mset[lo];
+
+        }*/
+
+
+    }
+
+    *loidx = lo;
+*roidx = ro;
+
+return m;
+
+
+}
+
+int co(Mat mx, int i, int j, int i2, int j2){ //correspond consistent col, eg white, grey ok
+
+    if (i < 0) return 0;
+    if (j < 0) return 0;
+    if (i > (mx.cols - 1)) return 0;
+    if (j > (mx.rows - 1)) return 0;
+
+    if (i2 < 0) return 0;
+    if (j2 < 0) return 0;
+    if (i2 > (mx.cols - 1)) return 0;
+    if (j2 > (mx.rows - 1)) return 0;
+
+    Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+    Vec3b h2 = mx.at<Vec3b>(Point(i2, j2));
+
+    //if white
+    if (h1[0] == 255){
+        if ((h2[0] == 255) || (h2[0] == 127)) return 1;
+    }
+
+    if (h1[0] == 0){
+        if ((h2[0] == 0) || (h2[0] == 127)) return 1;
+    }
+
+    return 0;
+
+
+}
+
+int som(Vec3b x){
+
+    return (x[0] + x[1] + x[2]);
+}
+
+int noro(int& i, int& j){
+
+
+    if ((i + 1) > (mx.cols - 1)) return 0;
+    if ((i - 1) < 0) return 0;
+    if ((j + 1) > (mx.rows - 1)) return 0;
+    if ((j - 1) < 0) return 0;
+
+
+    Vec3b h1 = mxm.at<Vec3b>(Point(i, j));
+
+    Vec3b h2 = mxm.at<Vec3b>(Point(i + 1, j));
+    Vec3b h3 = mxm.at<Vec3b>(Point(i - 1, j));
+    Vec3b h4 = mxm.at<Vec3b>(Point(i, j - 1));
+    Vec3b h5 = mxm.at<Vec3b>(Point(i, j + 1));
+
+    int min = 2; int mins = abs(som(h2) - som(h1)) - 10;
+    int min2 = abs(som(h3) - som(h1));
+    if (min2 < mins){
+        mins = min2;
+        min = 3;
+    }
+    min2 = abs(som(h4) - som(h1));
+    if (min2 < mins){
+        mins = min2;
+        min = 4;
+    }
+    min2 = abs(som(h5) - som(h1));
+    if (min2 < mins){
+        mins = min2;
+        min = 5;
+    }
+
+    if (mins > 30) return 0;
+
+    if (min == 2){ i = i + 1; j = j; }
+    else if (min == 3){ i = i - 1; j = j; }
+    else if (min == 4){ i = i; j = j - 1; }
+    else if (min == 5){ i = i; j = j + 1; }
+
+    return 1;
+
+}
+
+void oocol(int i, int j, int i2, int j2){
+
+    if ((i + 2) > (mx.cols - 1)) return;
+    if ((i - 2) < 0) return;
+    if ((j + 2) > (mx.rows - 1)) return;
+    if ((j - 2) < 0) return;
+
+    Vec3b h2 = mx.at<Vec3b>(Point(i2, j2));
+    Vec3b h2m = mxm.at<Vec3b>(Point(i2, j2));
+    if ((h2m[0] == 100) && (h2m[1] == 100) && (h2m[2] == 100))
+        return;
+
+    Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+
+    if ((abs(h1[0] - h2[0]) < 10) && (abs(h1[1] - h2[1]) < 10) && (abs(h1[2] - h2[2]) < 10) ){
+        mxm.at<Vec3b>(Point(i2, j2)) = Vec3b(100, 100, 100);
+        oocol(i2, j2, i2 + 1, j2);
+        oocol(i2, j2, i2 - 1, j2);
+        oocol(i2, j2, i2, j2 + 1);
+        oocol(i2, j2, i2, j2 - 1);
+    }
+
+
+
+
+
+
+}
+
+
+
+int main(int argc, char** argv){
+
+    //mx = imread("F:\\sn15\\otest.png");
+    VideoCapture vc1 = VideoCapture("F:\\sn16\\Driving on 401.mp4");
+
+    namedWindow("oo", CV_WINDOW_NORMAL);
+    namedWindow("oo2", CV_WINDOW_NORMAL);
+    namedWindow("osxm", CV_WINDOW_NORMAL);
+    ofstream fout("test.txt");
+    VideoWriter outputVideo = VideoWriter();
+
+    outputVideo.open("out.avi",
+        CV_FOURCC('P', 'I', 'M', '1'),
+        vc1.get(CV_CAP_PROP_FPS),
+        Size(1280, 720),
+        1);
+
+    //detect blck bottom on street
+    //move up until white/bright found in rect proportion
+
+    //vc1.set(CV_CAP_PROP_POS_FRAMES, 1480);
+    int cntmiddle = 0;
+    int mm = 0; int mmr = 0;
+    Vec3b mn;
+    int init = 0;
+    int mnx = 720;
+    int mny = 460;
+    int cntimo = 0;
+    while (vc1.read(mx)){
+
+        cntimo++;
+        mx.copyTo(mxm);
+        mx.copyTo(mx2);
+        //mx.copyTo(norem);
+        mos.clear();
+
+        //circle(mx2, Point(720, 460), 30, Scalar(255, 255, 0), 3);
+        Vec3b mn2 = mx.at<Vec3b>(Point(720, 460));
+        int cmn = 0;
+        Vec3b mincol = mn2;
+        int minodist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) < minodist) minodist = abs(mn2[1] - mn[1]);
+        if (abs(mn2[2] - mn[2]) < minodist) minodist = abs(mn2[2] - mn[2]);
+
+
+        if ( (minodist > 3) && init ){
+            while (minodist > 3){
+                cmn++;
+                if (cmn == 1){
+                    mn2 = mx.at<Vec3b>(Point(700, 460));
+                }
+                else if (cmn == 2){
+                    mn2 = mx.at<Vec3b>(Point(680, 460));
+                }
+                else if (cmn == 3){
+                    mn2 = mx.at<Vec3b>(Point(660, 460));
+                }
+                else if (cmn == 4){
+                    mn2 = mx.at<Vec3b>(Point(620, 460));
+                }
+                else if (cmn == 5){
+                    mn2 = mx.at<Vec3b>(Point(600, 460));
+                }
+                else if (cmn == 6){
+                    mn2 = mx.at<Vec3b>(Point(590, 460));
+                }
+                else if (cmn == 7){
+                    mn2 = mx.at<Vec3b>(Point(580, 460));
+                }
+                else if (cmn == 8){
+                    mn2 = mx.at<Vec3b>(Point(550, 460));
+                }
+                else if (cmn == 9){
+                    mn2 = mx.at<Vec3b>(Point(740, 460));
+                }
+                else if (cmn == 10){
+                    mn2 = mx.at<Vec3b>(Point(820, 460));
+                }
+                else{
+                    //mn2 = mxm.at<Vec3b>(Point(780, 460));
+                    break;
+                }
+
+                int odist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) < odist) odist = abs(mn2[1] - mn[1]);
+                if (abs(mn2[2] - mn[2]) < odist) odist = abs(mn2[2] - mn[2]);
+
+                if (odist < minodist){
+                    minodist = odist;
+                    mincol = mn2;
+                }
+
+
+            }
+
+        }
+        //printf("%d\n",cmn);
+        if (!init){
+            mx.copyTo(nor);
+        };
+        mn = mincol; init = 1;
+
+        //confirm small + big box by mostly red color connection of startpoints
+
+        int norskip = 15;
+        int mml;
+        int mmh;
+        if (cntmiddle == 0){
+            mm = middle2(mx, &mml, &mmh, 0);
+            mmr = middler(mx, &mml, &mmh);
+            printf("m:%d mmr:%d\n", mm, mmr);
+            cntmiddle = 100;
+        }
+        else
+            cntmiddle--;
+
+
+        /*for (int j = 0; j < (mx.rows - 10); j++){
+        for (int i = 0; i < (mx.cols - 1); i++){
+
+        Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+        Vec3b h2 = mx.at<Vec3b>(Point(i, j+10));
+
+        if ((h1[0] < 0.85 * h2[0]) && (h1[1] < 0.85 * h2[1]) && (h1[2] < 0.85 * h2[2])){
+        mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 0, 0);
+        }
+
+        }
+        }*/
+
+        //sinicnce
+        for (int j = 0; j < (mx.rows - 250); j++){
+            int cnt = 0;
+            for (int i = 0; i < (mx.cols - 2); i++){
+
+                Vec3b h1 = mxm.at<Vec3b>(Point(i, j)); //mxm to not to test left second time only lower possible dist from init point, could still more to right 200 here ok test
+                Vec3b h2 = mxm.at<Vec3b>(Point(i + 1, j));
+
+                int mxi;
+                if (h1[0] >= h1[1]) mxi = h1[0]; else mxi = h1[1];
+                if (h1[2] >= mxi) mxi = h1[2];
+
+                if ((abs(h1[0] - h2[0]) < 15) && (abs(h1[1] - h2[1]) < 15) && (abs(h1[2] - h2[2]) < 15) && (abs(mn[0] - h2[0]) < 28) && (abs(mn[1] - h2[1]) < 28) && (abs(mn[2] - h2[2]) < 28)){
+                    mxm.at<Vec3b>(Point(i, j)) = mn; cnt = 0; //could check set mn b g r differenct to cnt cnt cnt
+                }
+
+                else if ((h1[1] > h1[0]) && (h1[0] > 1.2 * h1[2]) && (h1[0] < 1.4 * h1[2]) && (h1[1] > 6+h1[0]) ){ // && (h1[0] < 1.4 * h1[2])
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(100, 110, 70); cnt = 0;
+                }
+                else if ((h1[2] >= h1[0]) && (h1[2] >= h1[1]) && (!(h1[0] < h1[1])) && (j > (mx.rows-430) ) ){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 0, 255); cnt = 0;
+                }
+                else if ((h1[2] >= 1.1 * h1[0]) && (h1[2] >= 1.1 * h1[1]) && (j < (mx.rows - 430))){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 0, 255); cnt = 0;
+
+                    if ((h1[1] >= 1.2 * h1[0]) && (h1[2] >= 1.2 * h1[0])){
+                        mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 255, 255); cnt = 0;
+                    }
+                    else if (j >  250){
+
+
+                        int oisdetect = 0;
+
+
+                        for (int n = -40; n < 40; n+=5){
+
+                            if ((i + n)>(mx.cols - 1)) break;
+                            Vec3b h1 = mx.at<Vec3b>(Point(i+n, 460)); //+ n
+
+                            if ((abs(h1[0] - mn[0])<40) && (abs(h1[1] - mn[1])<40) && (abs(h1[2] - mn[2])<40)){
+
+                                mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 0, 255);
+                                oisdetect = 1;
+                                break;
+                            }
+
+                            /*if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 0)){
+
+                                oisdetect = 1;
+                                break;
+
+                            }*/
+
+                        }
+                        /*
+                        if (oisdetect){
+
+                            mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 0, 255); cnt = 0;
+
+                        }*/
+
+                        //if ((j + 1) <= (mx.rows - 1)){
+
+                            //Vec3b h2 = nor.at<Vec3b>(Point(i, j + 1));
+
+                            //if (!((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 255))){
+                            //    if ((h2[0] == 255) && (h2[1] == 0) && (h2[2] == 255)){
+                                    //mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 0, 255); cnt = 0;
+//norem.at<Vec3b>(Point(i, j)) = Vec3b(255, 0, 255); //to next line cmp
+                                //}
+                            //}
+
+                        //}
+
+                    }
+                }
+                else if ((h1[0] >= 1.2 * h1[2]) && (h1[0] >= 1.2 * h1[1])){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 0, 0); cnt = 0;
+                }
+                /*else if ((h1[0] >= 1.2 * h1[2]) && (h1[1] >= 1.2 * h1[2])){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 255, 0); cnt = 0;
+                }*/
+                else if ((h1[1] >= 1.2 * h1[0]) && (h1[1] >= 1.2 * h1[2])){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 255, 0); cnt = 0;
+                }
+                else if ((h1[1] >= 1.2 * h1[0]) && (h1[2] >= 1.2 * h1[0])){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 255, 255); cnt = 0;
+                }
+                else if (mxi >= mm ){ //(3*mm+mml)/4
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 255, 255); cnt = 0;
+                }
+                else{
+                    cnt++;
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(cnt, cnt, cnt);
+
+                }
+
+                /*if ((h1[0] < 80) && (h1[1] < 80) && (h1[2] < 80)){
+
+                int cnt = 1;
+                for (int no = 0; no < 200; no++){
+
+                Vec3b h1 = mxm.at<Vec3b>(Point(i+no, j));
+                if ((h1[0] < 100) && (h1[1] < 100) && (h1[2] < 100)){
+
+                cnt++;
+                mxm.at<Vec3b>(Point(i+no, j)) = Vec3b(255, cnt, 0);
+
+                }
+
+                }
+
+                }*/
+
+            }
+        }
+
+        //to often chooses wrong color
+        /*Vec3b mn10 = mn; int mn10done = 0; //mn need to be different in 3 comps
+        //Vec3b mn11 = mn; int mn11done = 0;
+        for (int i = 28; i < 70; i++){
+            Vec3b mn2 = mx.at<Vec3b>(Point(mnx - i, mny - i));
+            Vec3b mnx2 = mx.at<Vec3b>(Point(mnx - i, mny - i));
+
+            int mxodist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) > mxodist) mxodist = abs(mn2[1] - mn[1]);
+            if (abs(mn2[2] - mn[2]) > mxodist) mxodist = abs(mn2[2] - mn[2]);
+
+            if ((mxodist > 20) && (!mn10done) && (mxodist < 28)){    // ((mnx2[0] == 255) && (mnx2[1] == 255) && (mnx2[2] == 255)){
+
+
+                //if (!mn10done)
+                //if (mxodist < 20){
+                    //for i j write col 1/2 tolernce
+                    mn10 = mn2; mn10done = 1;
+                    //mxm.at<Vec3b>(Point(mnx - i, mny - i)) = Vec3b(127, 0, 127);
+                    circle(mxm, Point(mnx - i, mny - i), 30, Scalar(127, 0, 127), 4);
+                //}
+
+
+
+            }
+            else if (mxodist > 28 ){
+                break;
+            }
+
+            if (mn10done )
+                break;
+
+        }*/
+        /*&& mn11done*/
+
+
+        //sign ((+ second street pss))
+        for (int j = 0; j < (mx.rows - 430); j++){
+            for (int i = 0; i < (mx.cols - 1); i++){
+
+                //Vec3b h0 = mx.at<Vec3b>(Point(i, j));
+                Vec3b h1 = mxm.at<Vec3b>(Point(i, j));
+                Vec3b h2 = mx2.at<Vec3b>(Point(i, j));
+
+                /*
+                if ((abs(h0[0] - mn10[0]) < 10) && (abs(h0[1] - mn10[1]) < 10) && (abs(h0[2] - mn10[2]) < 10)){
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255,0,255); // mn10;
+                }*/
+
+                //if ((h1[2] >= h1[0]) && (h1[2] >= h1[1]) && (!(h1[0] < h1[1]))){
+                //    mxm.at<Vec3b>(Point(i, j)) = Vec3b(255, 0, 255);
+                //}
+
+                if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 255)){
+
+                    int lcnt = 0;
+                    int toskip = 0;
+                    for (int n0 = 0; n0 < 60; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + n0, j + 3));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + n0, j + 3));
+                        if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 255)){
+                            lcnt++;
+                        }
+                        else break;
+                    }
+
+                    int ocnt = 0;
+                    for (int n0 = 0; n0 < 70; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + 3, j + n0));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + 3, j + n0));
+                        if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 255)){
+                            ocnt++;
+                        }
+                        /*else if((h1[0] == 0) && (h1[1] == 0) && (h1[2] == 255)){
+                            toskip = 1;
+                        }*/
+                        else break;
+                    }
+
+                    if ( (j > 200) && (ocnt > 1.2 * lcnt) && (lcnt > 10) && (ocnt > 15)){ //no high sky light
+
+
+
+                        rectangle(mx2, Point(i, j), Point(i + lcnt, j + ocnt), Scalar(255, 0, 255), -1);
+
+                    }
+
+                }
+
+
+                if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 0)){
+
+                    int lcnt = 0;
+                    for (int n0 = 0; n0 < 60; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + n0, j + 3));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + n0, j + 3));
+                        if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 0)){
+                            lcnt++;
+                        }
+                        else break;
+                    }
+
+                    int ocnt = 0;
+                    for (int n0 = 0; n0 < 70; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + 3, j + n0));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + 3, j + n0));
+                        if ((h1[0] == 255) && (h1[1] == 0) && (h1[2] == 0)){
+                            ocnt++;
+                        }
+                        else break;
+                    }
+
+                    if ( (lcnt > 10)  && (ocnt > 10) ){
+                        rectangle(mx2, Point(i, j), Point(i + lcnt, j + ocnt), Scalar(255, 0, 0), -1);
+                    }
+
+                }
+
+                if ((h1[0] == 100) && (h1[1] == 110) && (h1[2] == 70)){
+
+                    int lcnt = 0;
+                    for (int n0 = 0; n0 < 60; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + n0, j + 3));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + n0, j + 3));
+                        if ((h1[0] == 100) && (h1[1] == 110) && (h1[2] == 70)){
+                            lcnt++;
+                        }
+                        else break;
+                    }
+
+                    int ocnt = 0;
+                    for (int n0 = 0; n0 < 70; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + 3, j + n0));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + 3, j + n0));
+                        if ((h1[0] == 100) && (h1[1] == 110) && (h1[2] == 70)){
+                            ocnt++;
+                        }
+                        else break;
+                    }
+
+                    if( (1.48*lcnt < ocnt) && (lcnt > 10)){
+                        //&& (ocnt < 1.48*lcnt)
+                        rectangle(mx2, Point(i, j), Point(i + lcnt, j + ocnt), Scalar(127, 255, 70), -1);
+                    }
+
+
+                }
+
+                if ((h1[0] == 0) && (h1[1] == 255) && (h1[2] == 255) && (!((h2[0] == 0) && (h2[1] == 255) && (h2[2] == 255))) && (h2[2]>90) && (h2[2]>1.05*h2[1])){
+
+                    /*int cnt = 1;
+                    for (int n0 = 0; n0 < 12; n0++)
+                    for (int n1 = 0; n1 < 12; n1++){
+                    Vec3b h1 = mxm.at<Vec3b>(Point(i + n0, j + n1));
+
+                    if ((h1[0] == 0) && (h1[1] == 255) && (h1[2] == 255)){
+                    cnt++;
+                    }
+
+                    }
+
+                    if (cnt > 120)
+                    rectangle(mx2, Point(i, j), Point(i + 12, j + 12), Scalar(0, 255, 255), 2);*/
+
+                    int lcnt = 0;
+                    for (int n0 = 0; n0 < 60; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + n0, j + 3));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + n0, j + 3));
+                        if ((h1[0] == 0) && (h1[1] == 255) && (h1[2] == 255) && (h2[2]>90)){
+                            lcnt++;
+                        }
+                        else break;
+                    }
+
+                    int ocnt = 0;
+                    for (int n0 = 0; n0 < 70; n0++){
+                        Vec3b h1 = mxm.at<Vec3b>(Point(i + 3, j + n0));
+                        Vec3b h2 = mx2.at<Vec3b>(Point(i + 3, j + n0));
+                        if ((h1[0] == 0) && (h1[1] == 255) && (h1[2] == 255) && (h2[2]>90) && (h2[2]>1.05*h2[1])){
+                            ocnt++;
+                        }
+                        else break;
+                    }
+
+                    if (((lcnt*1.35) < (ocnt)) && ((lcnt*1.6) > ocnt) && (lcnt>10)){
+                        rectangle(mx2, Point(i, j), Point(i + lcnt, j + ocnt), Scalar(0, 255, 255), -1);
+
+                    }
+
+
+                }
+
+
+
+            }
+        }
+
+        confirm2lights = 0;
+        for (int j = mx.rows-430; j < (mx.rows - 250); j++){ //fixed limit not if not needed 430, for cmp with sign helpful
+            int norx = 0;
+            int nor = 0;
+            for (int i = 0; i < (mx.cols - 1); i++){
+
+                Vec3b h1 = mx.at<Vec3b>(Point(i, j));
+
+                if (((h1[0] < h1[2]) && (h1[1] < h1[2])) && (!(h1[0] < h1[1]))){
+
+                    if (nor == 1){
+
+                        confirm2lights++;
+
+                        int m = (norx + i) / 2;
+                        int my = i - norx;
+                        if (my < 300){
+
+
+                            int ncon = 0;
+                            for (int no = my / 3; no < my+my/4; no++){
+
+                                if ((j + no) >(mx.rows - 1)) break;
+                                h1 = mxm.at<Vec3b>(Point(m + my / 4, j + no));
+                                Vec3b h0 = mxm.at<Vec3b>(Point(m, j + no));
+
+                                if ((h0[0] > 130) && (h0[1] > 130) && (h0[2] > 130)){
+
+                                    int cnt = 0;
+                                    for (int n = -6; n < 6; n++){
+                                        Vec3b h0 = mxm.at<Vec3b>(Point(m + n, j + no + 3));
+                                        cnt += h0[0] + h0[1] + h0[2];
+                                    }
+                                    if (cnt > 8000)
+                                        ncon = 1;// mx2.at<Vec3b>(Point(m, j + no + 3)) = Vec3b(255, 255, 0);
+
+                                }
+
+                                if ((h1[0] != 255) && (h1[0] == h1[1]) && (h1[1] == h1[2])){
+
+                                    if (h1[1] >= (5 * my / 8)){
+
+                                        h1 = mxm.at<Vec3b>(Point(m, j + no));
+                                        if ((h1[0] != 255) && (h1[0] == h1[1]) && (h1[1] == h1[2])){
+
+                                            int notdetect = 0;
+                                            for (int n = 0; n < 30; n++){
+                                                h1 = mx2.at<Vec3b>(Point(norx - n, j ));
+
+                                                if ((h1[0] == 255) && (h1[2] == 0)){
+
+                                                    notdetect = 1;
+                                                    break;
+                                                }
+
+                                            }
+                                            for (int n = 0; n < 10; n++){
+                                                if ((j - n) < 0) break;
+                                                h1 = mx2.at<Vec3b>(Point(norx, j-n));
+                                                if ((h1[0] == 255) && (h1[2] == 0)){
+
+                                                    notdetect = 1;
+                                                    break;
+                                                }
+                                            }
+
+                                            if (notdetect == 0){
+                                                if (h1[1] >= (my / 2)){ //moving outline likely to move some else could try mx diff min diff blnce
+                                                    //printf("%d ",no);
+
+                                                    Vec3b mn = mxm.at<Vec3b>(Point(norx, j));
+                                                    Vec3b mn2 = mxm.at<Vec3b>(Point(norx, j - 1));
+                                                    int minn = 0;
+                                                    int mxodist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) > mxodist) mxodist = abs(mn2[1] - mn[1]);
+                                                    if (abs(mn2[2] - mn[2]) > mxodist) mxodist = abs(mn2[2] - mn[2]);
+                                                    for (int n = 1; n < 2 * my / 3; n++){
+                                                        if ((j - n - 1) < 0) break;
+                                                        Vec3b mn = mxm.at<Vec3b>(Point(norx, j - n));
+                                                        Vec3b mn2 = mxm.at<Vec3b>(Point(norx, j - 1 - n));
+                                                        int odist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) > odist) odist = abs(mn2[1] - mn[1]);
+                                                        if (abs(mn2[2] - mn[2]) > odist) odist = abs(mn2[2] - mn[2]);
+
+                                                        if (odist > mxodist){
+
+mxodist = odist;
+                                                            minn = n;
+
+                                                        }
+                                                    }
+//mx2.at<Vec3b>(Point(norx, j - minn)) = Vec3b(255, 255, 0);
+
+                                                    mn = mxm.at<Vec3b>(Point(i, j));
+                                                    mn2 = mxm.at<Vec3b>(Point(i, j - 1));
+                                                    int minn2 = 0;
+                                                    mxodist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) > mxodist) mxodist = abs(mn2[1] - mn[1]);
+                                                    if (abs(mn2[2] - mn[2]) > mxodist) mxodist = abs(mn2[2] - mn[2]);
+                                                    for (int n = 1; n < 2*my/3; n++){
+                                                        if ((j - n - 1) < 0) break;
+                                                        Vec3b mn = mxm.at<Vec3b>(Point(i, j - n));
+                                                        Vec3b mn2 = mxm.at<Vec3b>(Point(i, j - 1 - n));
+                                                        int odist = abs(mn2[0] - mn[0]); if (abs(mn2[1] - mn[1]) > odist) odist = abs(mn2[1] - mn[1]);
+                                                        if (abs(mn2[2] - mn[2]) > odist) odist = abs(mn2[2] - mn[2]);
+
+                                                        if (odist > mxodist){
+
+mxodist = odist;
+                                                            minn2 = n;
+
+                                                        }
+                                                    }
+
+                                                    int mxnn = minn; if (minn2 > mxnn) mxnn = minn2;
+//mx2.at<Vec3b>(Point(norx, j - minn)) = Vec3b(255, 255, 0);
+                                                    //line(mx2, Point(norx, j - mxnn), Point(i, j - mxnn), Scalar(255, 255, 0), 2);
+
+
+                                                    mn = mxm.at<Vec3b>(Point(norx, j));
+                                                    mn2 = mxm.at<Vec3b>(Point(norx-3, j));
+                                                    int n = 1;
+                                                    while ( ((mn[0] == 0) && (mn[1] == 0) && (mn[2] == 255)) ||  ((mn2[0] == 0) && (mn2[1] == 0) && (mn2[2] == 255))){
+                                                        mn = mxm.at<Vec3b>(Point(norx-n, j));
+                                                        mn2 = mxm.at<Vec3b>(Point(norx - n - 3, j));
+                                                        n--;
+                                                    }
+
+                                                    mn = mxm.at<Vec3b>(Point(i, j));
+                                                    int n2 = 1;
+                                                    while ((mn[0] == 0) && (mn[1] == 0) && (mn[2] == 255)){
+                                                        mn = mxm.at<Vec3b>(Point(i + n2, j));
+                                                        n2++;
+                                                    }
+
+
+mx2.at<Vec3b>(Point(m, j + no)) = Vec3b(0, 255, 255);
+mx2.at<Vec3b>(Point(m - 1, j + no)) = Vec3b(0, 255, 255);
+mx2.at<Vec3b>(Point(m + 1, j + no)) = Vec3b(0, 255, 255);
+mx2.at<Vec3b>(Point(m, j)) = Vec3b(0, 255, 0);
+mx2.at<Vec3b>(Point(m - 1, j)) = Vec3b(0, 255, 0);
+mx2.at<Vec3b>(Point(m + 1, j)) = Vec3b(0, 255, 0);
+
+                                                    moox mos1;
+                                                    mos1.x1 = norx - n;
+                                                    mos1.y1 = j - mxnn;
+                                                    mos1.x2 = i + n2;
+                                                    mos1.y2 = j + no;
+                                                    mos1.oss = 1;
+                                                    mos1.ncon = ncon;
+
+mos.push_back(mos1);
+                                                    //if qudrtic then do not serch further on top for diff
+                                                    //if rectngulr then move higher to get diff but not full qudrtic needed bcse bottom could be to soon detected
+
+
+
+                                                    break;
+                                                }
+                                            }
+                                        }
+
+                                    }
+
+                                }
+
+                                //if (no == (my - 1))
+                                //    mxm.at<Vec3b>(Point(m + m / 2, j + no)) = Vec3b(255, 255, 255);
+
+                            }
+
+
+
+                        }
+                    }
+
+                    mxm.at<Vec3b>(Point(i, j)) = Vec3b(0, 0, 255);
+                    nor = norskip;
+
+                }
+                else if (nor == norskip){
+                    nor--;
+                    norx = i;
+                }
+                else if (nor > 1)
+                    nor--;
+
+
+
+            }
+        }
+
+
+        //
+        for (int i = 0; i < 2; i++)
+        for (std::vector<moox>::iterator it = mos.begin(); it != mos.end(); ++it)
+            for (std::vector<moox>::iterator it2 = mos.begin(); it2 != mos.end(); ++it2){
+
+                if (it->oss == -1) continue;
+                if (it2->oss == -1) continue;
+
+                if (it == it2) continue;
+
+                int x11 = it->x1;
+                int y11 = it->y1;
+                int x12 = it->x2;
+                int y12 = it->y2;
+                int m1x = (x11 + x12) / 2;
+                int m1y = (y11 + y12) / 2;
+
+                int x21 = it2->x1;
+                int y21 = it2->y1;
+                int x22 = it2->x2;
+                int y22 = it2->y2;
+                int m2x = (x21 + x22) / 2;
+                int m2y = (y21 + y22) / 2;
+
+                //if center dist < 40 remove second, + set first mx of both
+                int odist = sqrt((m1x - m2x) * (m1x - m2x) + (m1y - m2y) * (m1y - m2y));
+
+                int dx = it->x2 - it->x1;
+                //int dx2 = it2->x2 - it2->x1;
+                //int so = dx / (dx2+1);
+
+                int so = 0; //smll box in
+                if ((m2x > it->x1) && (m2x < it->x2)) so++;
+                if ((m2y > it->y1) && (m2y< it->y2)) so++;
+
+                /*int so2 = 0;
+                if ((it->x1 > it2->x1) && (it->x1 < it2->x2)) so2++;
+                if ((it->x2 > it2->x1) && (it->x2 < it2->x2)) so2++;
+                if ((it->y1 > it2->y1) && (it->y1 < it2->y2)) so2++;
+                if ((it->y2 > it2->y1) && (it->y2 < it2->y2)) so2++;*/
+
+                if ((odist < dx / 2) || (so == 2) ){ //(odist < (so*dx/6)) could middle the it1x1 it2x1
+
+                    if (it2->x1 < it->x1) it->x1 = (2*it2->x1+it->x1)/3;
+                    if (it2->y1 < it->y1) it->y1 = (2 * it2->y1 + it->y1) / 3;
+                    if (it2->x2 > it->x2) it->x2 = (2 * it2->x2 + it->x2) / 3;
+                    if (it2->y2 > it->y2) it->y2 = (2 * it2->y2 + it->y2) / 3;
+                    it->merge++;
+                    it->merge += it2->merge;
+                    it2->oss = -1;
+                }
+
+
+            }
+
+        if ((cntimo % 20) == 0)
+            mx2.copyTo(nor);
+
+        int moscnt = 0;
+        int moscnt2 = 0;
+        for (std::vector<moox>::iterator it = mos.begin(); it != mos.end(); ++it){
+
+            moscnt2++;
+
+            if (it->oss != -1){
+
+                moscnt++;
+
+                float mrto = (float)(it->y2 - it->y1) / (float)(it->x2 - it->x1);
+
+                if (mrto < 1.2f){
+                    rectangle(mx2, Point(it->x1, it->y1), Point(it->x2, it->y2), Scalar(255, it->ncon * 255, 0), it->merge / 2);
+                    rectangle(nor, Point(it->x1, it->y1), Point(it->x2, it->y2), Scalar(255, it->ncon * 255, 0), it->merge / 2);
+                }
+                //else
+                    //rectangle(mx2, Point(it->x1, it->y1), Point(it->x2, it->y2), Scalar(255, 255, 255), it->merge / 2);
+                //rectangle(mx2, Point(norx - n, j - mxnn), Point(i + n2, j + no), Scalar(255, ncon * 255, 0));
+            }
+
+        }
+
+    end:
+        imshow("oo", mx2);
+        imshow("oo2", mxm);
+        outputVideo.write(mx2);
+        imshow("osxm", mx);
+        cntofmos += moscnt;
+        cntofmos2 += moscnt2;
+        cntofmos3 += confirm2lights;
+        //fout << "sum:" << cntofmos << ", " << moscnt << "; sumnotreduced: " << cntofmos2 << ", " << moscnt2 << "; confirmlights: " << cntofmos3 << ", " << confirm2lights << endl;
+        fout <<  cntofmos << " " << moscnt << " " << cntofmos2 << "  " << moscnt2 << " " << cntofmos3 << " " << confirm2lights << endl;
+
+        //printf("sum:%d, %d; sumnotreduced: %d, %d; confirmlights: %d, %d \n", cntofmos, moscnt, cntofmos2, moscnt2, cntofmos3, confirm2lights);
+        waitKey(1);
+
+
+    }
+    fout.close();
+
+}
